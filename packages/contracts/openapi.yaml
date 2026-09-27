@@ -1,0 +1,218 @@
+openapi: 3.1.0
+info:
+  title: Mandi API
+  version: 1.0.0-draft
+  description: Starter contract. See docs/lld/api.md for conventions; MND-013 completes all endpoints.
+servers:
+  - url: https://api.mandi.app/v1
+  - url: http://localhost:3000/v1
+security:
+  - bearer: []
+tags:
+  - name: auth
+  - name: baskets
+  - name: checkout
+paths:
+  /auth/otp:
+    post:
+      operationId: sendOtp
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone: { type: string, pattern: '^\+91[6-9][0-9]{9}$', example: '+919876543210' }
+      responses:
+        '202': { description: OTP sent }
+        '429': { $ref: '#/components/responses/Problem' }
+  /auth/otp/verify:
+    post:
+      operationId: verifyOtp
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code, device]
+              properties:
+                phone: { type: string }
+                code: { type: string, minLength: 6, maxLength: 6 }
+                device: { $ref: '#/components/schemas/DeviceInfo' }
+      responses:
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '400': { $ref: '#/components/responses/Problem' }
+  /baskets/current/plans:
+    post:
+      operationId: computePlans
+      tags: [baskets]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Plans for the current basket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanSet' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /baskets/current/checkout:
+    post:
+      operationId: checkout
+      tags: [checkout]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan_id]
+              properties:
+                plan_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Tier A orders placed and tier C hand-off steps
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckoutResult' }
+        '409': { $ref: '#/components/responses/Problem' }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: RFC 9457 problem details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code: { type: string, example: price_changed }
+        detail: { type: string }
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount: { type: integer, description: Amount in paise }
+        currency: { type: string, enum: [INR] }
+    DeviceInfo:
+      type: object
+      required: [platform, app_version]
+      properties:
+        platform: { type: string, enum: [ios, android] }
+        app_version: { type: string }
+    TokenPair:
+      type: object
+      required: [access_token, refresh_token, expires_in, is_new_user]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in: { type: integer }
+        is_new_user: { type: boolean }
+    StoreId:
+      type: string
+      enum: [zepto, instamart, blinkit, bbnow, firstclub]
+    Tier:
+      type: string
+      enum: [A, B, C]
+    PlanLine:
+      type: object
+      required: [product_id, store_product_id, quantity, unit_price]
+      properties:
+        product_id: { type: string, format: uuid }
+        store_product_id: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1 }
+        unit_price: { $ref: '#/components/schemas/Money' }
+    Fee:
+      type: object
+      required: [kind, amount, rule_id]
+      properties:
+        kind: { type: string, enum: [delivery, handling, small_cart, surge, platform] }
+        amount: { $ref: '#/components/schemas/Money' }
+        rule_id: { type: string, format: uuid }
+    PlanLeg:
+      type: object
+      required: [store_id, tier, subtotal, fees, eta_min, lines]
+      properties:
+        store_id: { $ref: '#/components/schemas/StoreId' }
+        tier: { $ref: '#/components/schemas/Tier' }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        fees: { type: array, items: { $ref: '#/components/schemas/Fee' } }
+        eta_min: { type: integer }
+        lines: { type: array, items: { $ref: '#/components/schemas/PlanLine' } }
+    Plan:
+      type: object
+      required: [id, kind, total, saving_vs_best_single_store, taps, legs]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [cheapest, fewest_taps, single_store] }
+        total: { $ref: '#/components/schemas/Money' }
+        saving_vs_best_single_store: { $ref: '#/components/schemas/Money' }
+        taps: { type: integer }
+        legs: { type: array, items: { $ref: '#/components/schemas/PlanLeg' } }
+    PlanSet:
+      type: object
+      required: [basket_id, computed_at, expires_at, plans]
+      properties:
+        basket_id: { type: string, format: uuid }
+        computed_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        plans: { type: array, items: { $ref: '#/components/schemas/Plan' } }
+    HandoffStep:
+      type: object
+      required: [product_id, title, quantity, open_url]
+      properties:
+        product_id: { type: string, format: uuid }
+        title: { type: string }
+        quantity: { type: integer }
+        open_url: { type: string, format: uri }
+        fallback_search: { type: string }
+    CheckoutResult:
+      type: object
+      required: [orders, handoffs, changes]
+      properties:
+        orders:
+          type: array
+          items:
+            type: object
+            required: [id, store_id, tier, status]
+            properties:
+              id: { type: string, format: uuid }
+              store_id: { $ref: '#/components/schemas/StoreId' }
+              tier: { $ref: '#/components/schemas/Tier' }
+              status: { type: string }
+              store_order_ref: { type: string }
+        handoffs:
+          type: array
+          items:
+            type: object
+            required: [order_id, store_id, steps]
+            properties:
+              order_id: { type: string, format: uuid }
+              store_id: { $ref: '#/components/schemas/StoreId' }
+              steps: { type: array, items: { $ref: '#/components/schemas/HandoffStep' } }
+        changes: { type: array, items: { type: object } }

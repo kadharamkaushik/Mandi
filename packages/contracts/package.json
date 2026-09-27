@@ -1,0 +1,14 @@
+{
+  "name": "@mandi/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "spectral lint openapi.yaml",
+    "generate": "openapi-typescript openapi.yaml -o generated/api.d.ts",
+    "breaking": "oasdiff breaking origin/main:packages/contracts/openapi.yaml openapi.yaml"
+  },
+  "devDependencies": {
+    "@stoplight/spectral-cli": "^6.13.0",
+    "openapi-typescript": "^7.4.0"
+  }
+}

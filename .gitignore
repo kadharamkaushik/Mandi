@@ -1,0 +1,31 @@
+# Node / NestJS
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+# iOS
+apps/ios/**/xcuserdata/
+apps/ios/**/DerivedData/
+apps/ios/**/*.xcuserstate
+apps/ios/**/Pods/
+# Android
+apps/android/**/.gradle/
+apps/android/**/build/
+apps/android/local.properties
+*.keystore
+# Infra
+infra/tofu/**/.terraform/
+infra/tofu/**/*.tfstate*
+# OS / editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+# Graphify cache (graph outputs are committed; caches are not)
+graphify-out/cache/
+
+# Graphify local state
+graphify-out/.graphify_root
+graphify-out/.graphify_python
